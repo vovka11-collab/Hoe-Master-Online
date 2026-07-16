@@ -1,0 +1,125 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    
+    - name: Install Cordova
+      run: |
+        npm install -g cordova
+        npm install -g cordova-cli
+    
+    - name: Setup Java
+      uses: actions/setup-java@v3
+      with:
+        java-version: '11'
+        distribution: 'adopt'
+    
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v2
+      with:
+        api-versions: '33'
+        build-tools-version: '33.0.0'
+    
+    - name: Create Cordova Project
+      run: |
+        cordova create platformer-app com.example.platformer "Platformer Game"
+        cd platformer-app
+    
+    - name: Add Android Platform
+      run: |
+        cd platformer-app
+        cordova platform add android
+    
+    - name: Copy Web Files
+      run: |
+        cd platformer-app
+        cp ../index.html www/
+        cp ../styles.css www/
+        cp ../game.js www/
+        cp ../script.js www/
+    
+    - name: Build APK
+      run: |
+        cd platformer-app
+        cordova build android --release
+    
+    - name: Sign APK
+      run: |
+        cd platformer-app/platforms/android/app/build/outputs/apk/release
+        # Создаём самоподписанный сертификат (для тестирования)
+        keytool -genkey -v -keystore platformer.keystore -keyalg RSA -keysize 2048 -validity 10000 \
+          -alias platformer_key -storepass 123456 -keypass 123456 \
+          -dname "CN=Platformer, OU=Game, O=Dev, L=Moscow, ST=Moscow, C=RU" || true
+        
+        # Подписываем APK
+        jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 \
+          -keystore platformer.keystore \
+          -storepass 123456 \
+          app-release-unsigned.apk platformer_key || true
+        
+        # Зипалигнируем
+        zipalign -v 4 app-release-unsigned.apk platformer-release.apk || true
+    
+    - name: Upload APK to Releases
+      uses: softprops/action-gh-release@v1
+      if: startsWith(github.ref, 'refs/tags/')
+      with:
+        files: platformer-app/platforms/android/app/build/outputs/apk/release/platformer-release.apk
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Upload APK as Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: platformer-apk
+        path: platformer-app/platforms/android/app/build/outputs/apk/release/platformer-release.apk
+        retention-days: 30
+    
+    - name: Upload unsigned APK as Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: platformer-apk-unsigned
+        path: platformer-app/platforms/android/app/build/outputs/apk/release/app-release-unsigned.apk
+        retention-days: 30
+    
+    - name: Create Release Notes
+      if: startsWith(github.ref, 'refs/tags/')
+      run: |
+        echo "## Platformer Game Release" > release_notes.md
+        echo "" >> release_notes.md
+        echo "Version: ${{ github.ref_name }}" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "### Features:" >> release_notes.md
+        echo "- 🎮 Endless platformer game" >> release_notes.md
+        echo "- 📱 Mobile optimized" >> release_notes.md
+        echo "- 👥 Local network multiplayer" >> release_notes.md
+        echo "- ⚡ Touch controls" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "### Installation:" >> release_notes.md
+        echo "1. Download the APK file" >> release_notes.md
+        echo "2. Enable installation from unknown sources on your Android device" >> release_notes.md
+        echo "3. Open the APK file to install" >> release_notes.md
+    
+    - name: Publish Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        body_path: release_notes.md
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
