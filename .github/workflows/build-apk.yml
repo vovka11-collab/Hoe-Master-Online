@@ -8,225 +8,73 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-apk:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
     
-    - name: Setup Node.js 18
+    - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '18'
     
-    - name: Setup Java 17
+    - name: Setup Java
       uses: actions/setup-java@v4
       with:
-        java-version: '17'
-        distribution: 'temurin'
+        java-version: '11'
+        distribution: 'adopt'
     
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
-      with:
-        api-versions: '34'
-        build-tools-version: '34.0.0'
-        ndk-version: '25.1.8937393'
-    
-    - name: Accept Android Licenses
+    - name: Install Gradle
       run: |
-        yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+        apt-get update
+        apt-get install -y gradle
     
     - name: Install Cordova
       run: |
-        npm install -g cordova@12 --no-save
+        npm install -g cordova@latest
     
-    - name: Verify Cordova Installation
+    - name: Create Cordova App
       run: |
-        cordova --version
-    
-    - name: Create Cordova Project
-      run: |
-        cordova create platformer com.platformer.game "Platformer Game"
-    
-    - name: Add Android Platform
-      run: |
-        cd platformer
-        cordova platform add android@13
+        cordova create platformer-game com.platformer.game "Platformer Game"
+        cd platformer-game
+        cordova platform add android
     
     - name: Copy Web Files
       run: |
-        cd platformer
+        cd platformer-game
         cp ../index.html www/
         cp ../styles.css www/
         cp ../game.js www/
     
-    - name: Update config.xml
+    - name: Build APK
       run: |
-        cd platformer
-        cat > config.xml << 'EOF'
-        <?xml version='1.0' encoding='utf-8'?>
-        <widget id="com.platformer.game" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
-            <name>Platformer Game</name>
-            <description>Endless platformer game with multiplayer support</description>
-            <author email="dev@platformer.com" href="https://github.com">Platformer Dev</author>
-            <content src="index.html" />
-            <access origin="*" />
-            <allow-intent href="http://*/*" />
-            <allow-intent href="https://*/*" />
-            <allow-intent href="tel:*" />
-            <allow-intent href="sms:*" />
-            <allow-intent href="mailto:*" />
-            <allow-intent href="geo:*" />
-            <platform name="android">
-                <allow-intent href="market:*" />
-                <preference name="Orientation" value="portrait" />
-                <preference name="Fullscreen" value="true" />
-                <preference name="android-minSdkVersion" value="21" />
-                <preference name="android-targetSdkVersion" value="34" />
-            </platform>
-            <engine name="android" spec="13" />
-        </widget>
-        EOF
+        cd platformer-game
+        cordova build android --release 2>&1 | tee build.log
+        echo "Build completed"
     
-    - name: Install Cordova Plugins
+    - name: Check Build Output
       run: |
-        cd platformer
-        cordova plugin add cordova-plugin-statusbar
-        cordova plugin add cordova-plugin-device
-        cordova plugin add cordova-plugin-splashscreen || true
+        find platformer-game -name "*.apk" -type f -exec ls -lh {} \;
     
-    - name: Build Debug APK
-      run: |
-        cd platformer
-        cordova build android -- --debug
-      continue-on-error: true
-    
-    - name: Build Release APK
-      run: |
-        cd platformer
-        cordova build android -- --release
-      continue-on-error: true
-    
-    - name: Find APK Files
-      run: |
-        mkdir -p apk-output
-        find platformer -name "*.apk" -type f
-        find platformer -name "*.apk" -type f -exec cp {} apk-output/ \; || true
-        ls -la apk-output/ || echo "No APK files found"
-    
-    - name: Alternative: Build with Gradle Directly
-      if: failure()
-      run: |
-        cd platformer/platforms/android
-        chmod +x gradlew
-        ./gradlew assembleDebug || true
-        ./gradlew assembleRelease || true
-        find . -name "*.apk" -type f -exec cp {} ../../../apk-output/ \; || true
-    
-    - name: Upload APK Artifacts
+    - name: Upload Build Logs
+      if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: platformer-app
-        path: apk-output/
-        retention-days: 30
-        if-no-files-found: warn
+        name: build-logs
+        path: platformer-game/build.log
+        retention-days: 7
     
-    - name: Create Web Release
-      run: |
-        mkdir -p web-release
-        cp index.html web-release/
-        cp styles.css web-release/
-        cp game.js web-release/
-        cp script.js web-release/ || true
-    
-    - name: Upload Web Release
+    - name: Upload APK
+      if: success()
       uses: actions/upload-artifact@v4
       with:
-        name: platformer-web
-        path: web-release/
+        name: platformer-apk
+        path: platformer-game/platforms/android/app/build/outputs/apk/**/*.apk
         retention-days: 30
     
-    - name: Create GitHub Release
-      if: startsWith(github.ref, 'refs/tags/')
-      uses: softprops/action-gh-release@v2
-      with:
-        files: |
-          apk-output/*.apk
-          web-release/*
-        body: |
-          # 🎮 Platformer Game Release
-          
-          ## Version: ${{ github.ref_name }}
-          
-          ### 📱 Features:
-          - ✨ Endless platformer gameplay
-          - 📱 Fully mobile optimized
-          - 👥 Local network multiplayer
-          - ⚡ Touch controls with virtual buttons
-          - 🎯 Infinite platform generation
-          - 👾 Enemy avoidance mechanics
-          - 🌐 Works on web and mobile
-          
-          ### 🚀 Installation (Android):
-          1. Download the APK file
-          2. Enable "Unknown Sources" in Android settings
-          3. Open the APK to install
-          4. Launch the game!
-          
-          ### 🌐 Web Version:
-          1. Download the web files
-          2. Open `index.html` in any browser
-          3. Works on desktop and mobile browsers
-          
-          ### 🎮 How to Play:
-          - **Move Left**: Press ◀ button or 'A' key
-          - **Move Right**: Press ▶ button or 'D' key
-          - **Jump**: Press JUMP button or SPACE
-          - **Pause**: Press ⏸ button
-          - Climb as high as possible
-          - Avoid enemies (orange circles)
-          - Play solo or with friends over local network
-          
-          ### 🌍 Multiplayer Setup:
-          1. Start a game on one device (host)
-          2. Other players join using the host's IP
-          3. Play together in real-time
-          
-          ### ⚙️ System Requirements:
-          - Android 5.0+ (API 21)
-          - Modern web browser (Chrome, Firefox, Safari, Edge)
-          - Local network connection for multiplayer
-        draft: false
-        prerelease: false
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Build Status Summary
+    - name: Build Status
       run: |
-        echo "# 🎮 Platformer Game Build Summary" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "## Build Information" >> $GITHUB_STEP_SUMMARY
-        echo "- **Date**: $(date)" >> $GITHUB_STEP_SUMMARY
-        echo "- **Branch**: ${{ github.ref }}" >> $GITHUB_STEP_SUMMARY
-        echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        
-        if [ -d "apk-output" ] && [ "$(ls -A apk-output)" ]; then
-          echo "## ✅ APK Build Status: SUCCESS" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Generated APK Files:" >> $GITHUB_STEP_SUMMARY
-          ls -1 apk-output/ | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY
-        else
-          echo "## ⚠️ APK Build Status: NO APK FILES GENERATED" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Possible reasons:" >> $GITHUB_STEP_SUMMARY
-          echo "- Build requires manual gradle configuration" >> $GITHUB_STEP_SUMMARY
-          echo "- See logs for detailed error messages" >> $GITHUB_STEP_SUMMARY
-        fi
-        
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "## ✅ Web Version: ALWAYS AVAILABLE" >> $GITHUB_STEP_SUMMARY
-        echo "Web files are packaged and can be hosted on any web server" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "## 📥 Downloads" >> $GITHUB_STEP_SUMMARY
-        echo "Check the Artifacts section to download build outputs" >> $GITHUB_STEP_SUMMARY
+        echo "## Build Status" >> $GITHUB_STEP_SUMMARY
+        echo "APK Build Completed" >> $GITHUB_STEP_SUMMARY
