@@ -1,0 +1,56 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+    
+    - name: Install Cordova
+      run: npm install -g cordova
+    
+    - name: Create Cordova project
+      run: |
+        cordova create cordova-app com.hoemaster.online "Hoe Master Online"
+        cd cordova-app
+        cordova platform add android
+    
+    - name: Copy game files
+      run: |
+        cp -r index.html css js assets cordova-app/www/
+        cp manifest.json cordova-app/www/
+    
+    - name: Update config.xml
+      run: |
+        cd cordova-app
+        sed -i 's/<content src="index.html" \/>/<content src="index.html" \/><preference name="Orientation" value="landscape" \/><preference name="Fullscreen" value="true" \/><preference name="DisallowOverscroll" value="true" \/><preference name="BackgroundColor" value="0xFF1a1a2e" \/>/g' config.xml
+    
+    - name: Build Android
+      run: |
+        cd cordova-app
+        cordova build android --release
+    
+    - name: Sign APK (debug key)
+      run: |
+        cd cordova-app/platforms/android/app/build/outputs/apk/release
+        keytool -genkey -v -keystore debug.keystore -alias androiddebugkey -keypass android -storepass android -keyalg RSA -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+        zipalign -v 4 app-release-unsigned.apk app-release.apk || true
+        apksigner sign --ks debug.keystore --ks-pass pass:android --key-pass pass:android --out app-signed.apk app-release-unsigned.apk || true
+        cp app-release-unsigned.apk HoeMasterOnline.apk || cp app-release.apk HoeMasterOnline.apk || true
+    
+    - name: Upload APK
+      uses: actions/upload-artifact@v3
+      with:
+        name: HoeMasterOnline-APK
+        path: cordova-app/platforms/android/app/build/outputs/apk/release/*.apk

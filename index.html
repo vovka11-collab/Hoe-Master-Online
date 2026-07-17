@@ -1,14 +1,76 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title></title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Hoe Master Online</title>
+  <link rel="stylesheet" href="css/style.css">
 </head>
-
 <body>
-  
-</body>
+  <!-- Экран лобби -->
+  <div id="lobby-screen">
+    <h1>🌾 Hoe Master Online</h1>
+    <p style="color:#888;font-size:0.9rem;margin-bottom:15px;">Платформер для друзей по LAN</p>
+    
+    <input type="text" id="nickname" placeholder="Введи ник" maxlength="12">
+    
+    <div id="color-picker">
+      <div class="color-option selected" data-color="#FF6B6B" style="background:#FF6B6B"></div>
+      <div class="color-option" data-color="#4ECDC4" style="background:#4ECDC4"></div>
+      <div class="color-option" data-color="#45B7D1" style="background:#45B7D1"></div>
+      <div class="color-option" data-color="#96CEB4" style="background:#96CEB4"></div>
+      <div class="color-option" data-color="#FFEAA7" style="background:#FFEAA7"></div>
+      <div class="color-option" data-color="#DDA0DD" style="background:#DDA0DD"></div>
+    </div>
+    
+    <button id="start-btn">🌐 Войти в игру</button>
+    <button id="solo-btn">🎮 Играть одному</button>
+    
+    <div id="players-list">
+      <h3>Игроки в сети: <span id="player-count">0</span></h3>
+      <ul id="connected-players"></ul>
+    </div>
+  </div>
 
+  <!-- Игровой экран -->
+  <div id="game-screen" style="display:none;">
+    <canvas id="game-canvas"></canvas>
+    
+    <!-- UI -->
+    <div id="game-ui">
+      <div id="hp-bar"></div>
+      <div id="players-hp"></div>
+      <div id="hoe-level">🌾 Тяпка: LVL <span>1</span></div>
+    </div>
+
+    <!-- Тач-контролы -->
+    <div id="touch-controls">
+      <div id="dpad">
+        <button id="btn-left">◀</button>
+        <button id="btn-right">▶</button>
+      </div>
+      <div id="action-buttons">
+        <button id="btn-jump">JUMP</button>
+        <button id="btn-attack">HOE!</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Экран смерти -->
+  <div id="death-screen" style="display:none;">
+    <h1>💀 Кто-то погиб!</h1>
+    <p>Все начинают заново...</p>
+    <button id="restart-btn">Переродиться</button>
+  </div>
+
+  <script src="js/utils.js"></script>
+  <script src="js/network.js"></script>
+  <script src="js/player.js"></script>
+  <script src="js/enemy.js"></script>
+  <script src="js/chest.js"></script>
+  <script src="js/level.js"></script>
+  <script src="js/input.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/main.js"></script>
+</body>
 </html>

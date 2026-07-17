@@ -1,0 +1,372 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #1a1a2e;
+  font-family: 'Segoe UI', sans-serif;
+  color: white;
+  touch-action: none;
+}
+
+/* ===== ЛОББИ ===== */
+#lobby-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  padding: 20px;
+  text-align: center;
+}
+
+#lobby-screen h1 {
+  font-size: 2.5rem;
+  margin-bottom: 20px;
+  text-shadow: 0 0 20px rgba(255,255,255,0.3);
+}
+
+#nickname {
+  padding: 15px 20px;
+  font-size: 1.2rem;
+  border: 2px solid #4ECDC4;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.1);
+  color: white;
+  width: 80%;
+  max-width: 300px;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+#nickname::placeholder {
+  color: rgba(255,255,255,0.5);
+}
+
+#color-picker {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.color-option {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  cursor: pointer;
+  transition: transform 0.2s, border-color 0.2s;
+}
+
+.color-option.selected {
+  border-color: white;
+  transform: scale(1.2);
+}
+
+#start-btn {
+  padding: 15px 40px;
+  font-size: 1.3rem;
+  background: #4ECDC4;
+  color: #1a1a2e;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: transform 0.2s;
+}
+
+#start-btn:active {
+  transform: scale(0.95);
+}
+
+#players-list {
+  margin-top: 30px;
+  background: rgba(0,0,0,0.3);
+  padding: 15px;
+  border-radius: 10px;
+  width: 80%;
+  max-width: 300px;
+}
+
+#connected-players {
+  list-style: none;
+  margin-top: 10px;
+}
+
+#connected-players li {
+  padding: 5px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.player-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+/* ===== ИГРОВОЙ ЭКРАН ===== */
+#game-screen {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+#game-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* UI */
+#game-ui {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  pointer-events: none;
+}
+
+#hp-bar {
+  display: flex;
+  gap: 5px;
+}
+
+.heart {
+  width: 24px;
+  height: 24px;
+  background: #FF6B6B;
+  clip-path: polygon(50% 0%, 100% 35%, 100% 70%, 50% 100%, 0% 70%, 0% 35%);
+}
+
+.heart.empty {
+  background: #333;
+}
+
+#players-hp {
+  display: flex;
+  gap: 15px;
+}
+
+.player-hp {
+  text-align: center;
+  font-size: 0.8rem;
+}
+
+.player-hp .name {
+  font-weight: bold;
+  margin-bottom: 2px;
+}
+
+.player-hp .hearts {
+  display: flex;
+  gap: 2px;
+}
+
+.player-hp .hearts .heart {
+  width: 16px;
+  height: 16px;
+}
+
+#hoe-level {
+  background: rgba(0,0,0,0.6);
+  padding: 8px 15px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+/* ===== ТАЧ-КОНТРОЛЫ ===== */
+#touch-controls {
+  position: absolute;
+  bottom: 20px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 20px;
+  pointer-events: auto;
+}
+
+#dpad {
+  display: flex;
+  gap: 10px;
+}
+
+#dpad button, #action-buttons button {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.15);
+  color: white;
+  font-size: 1.5rem;
+  font-weight: bold;
+  backdrop-filter: blur(5px);
+  transition: background 0.1s, transform 0.1s;
+}
+
+#dpad button:active, #action-buttons button:active {
+  background: rgba(255,255,255,0.3);
+  transform: scale(0.9);
+}
+
+#action-buttons {
+  display: flex;
+  gap: 15px;
+}
+
+#btn-jump {
+  background: rgba(78, 205, 196, 0.3) !important;
+}
+
+#btn-attack {
+  background: rgba(255, 107, 107, 0.3) !important;
+  width: 80px !important;
+}
+
+/* ===== ЭКРАН СМЕРТИ ===== */
+#death-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+#death-screen h1 {
+  font-size: 2.5rem;
+  color: #FF6B6B;
+  margin-bottom: 10px;
+}
+
+#death-screen p {
+  margin-bottom: 30px;
+  color: #aaa;
+}
+
+#restart-btn {
+  padding: 15px 40px;
+  font-size: 1.2rem;
+  background: #FF6B6B;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+}
+/* Кнопки лобби */
+#start-btn, #solo-btn {
+  padding: 15px 40px;
+  font-size: 1.2rem;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: transform 0.2s;
+  width: 80%;
+  max-width: 300px;
+  margin-top: 10px;
+}
+
+#start-btn {
+  background: #4ECDC4;
+  color: #1a1a2e;
+}
+
+#solo-btn {
+  background: #666;
+  color: white;
+}
+
+#start-btn:active, #solo-btn:active {
+  transform: scale(0.95);
+}
+/* ===== ДЖОЙСТИК ===== */
+#joystick-zone {
+  position: relative;
+  width: 120px;
+  height: 120px;
+}
+
+#joystick-base {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+#joystick-stick {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 50px;
+  height: 50px;
+  margin: -25px 0 0 -25px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.3);
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  transition: transform 0.05s;
+}
+
+/* Обновлённые тач-контролы */
+#touch-controls {
+  position: absolute;
+  bottom: 30px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 0 25px;
+  pointer-events: auto;
+}
+
+#action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  align-items: flex-end;
+}
+
+#btn-jump, #btn-attack {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.3);
+  color: white;
+  font-size: 0.9rem;
+  font-weight: bold;
+  backdrop-filter: blur(5px);
+}
+
+#btn-jump {
+  background: rgba(78, 205, 196, 0.3);
+}
+
+#btn-attack {
+  background: rgba(255, 107, 107, 0.3);
+  width: 90px;
+  height: 90px;
+  font-size: 1.1rem;
+}
+
+#btn-jump:active, #btn-attack:active {
+  transform: scale(0.9);
+}
