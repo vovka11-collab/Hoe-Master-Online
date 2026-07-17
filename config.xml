@@ -1,0 +1,31 @@
+<?xml version='1.0' encoding='utf-8'?>
+<widget id="com.platformer.game" version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+    <name>Platformer Game</name>
+    <description>Endless platformer game with mobile support</description>
+    <author email="dev@platformer.com" href="https://github.com">Platformer Dev</author>
+    <content src="index.html" />
+    <access origin="*" />
+    <allow-intent href="http://*/*" />
+    <allow-intent href="https://*/*" />
+    <allow-intent href="tel:*" />
+    <allow-intent href="sms:*" />
+    <allow-intent href="mailto:*" />
+    <allow-intent href="geo:*" />
+    <platform name="android">
+        <allow-intent href="market:*" />
+        <preference name="Orientation" value="portrait" />
+        <preference name="Fullscreen" value="true" />
+        <preference name="android-minSdkVersion" value="21" />
+        <preference name="android-targetSdkVersion" value="33" />
+        <preference name="android-build-tool-version" value="33.0.0" />
+        <icon src="res/android/icon.png" density="ldpi" />
+        <icon src="res/android/icon.png" density="mdpi" />
+        <icon src="res/android/icon.png" density="hdpi" />
+        <icon src="res/android/icon.png" density="xhdpi" />
+        <splash src="res/android/splash.png" density="port-ldpi" />
+        <splash src="res/android/splash.png" density="port-mdpi" />
+        <splash src="res/android/splash.png" density="port-hdpi" />
+        <splash src="res/android/splash.png" density="port-xhdpi" />
+    </platform>
+    <engine name="android" spec="13" />
+</widget>
