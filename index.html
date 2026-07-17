@@ -1,63 +1,14 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html>
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#667eea">
-    <title>Platformer Game</title>
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title></title>
 </head>
+
 <body>
-    <div id="app">
-        <!-- Start Screen -->
-        <div id="startScreen" class="screen active">
-            <div class="screen-content">
-                <h1>🎮 Platformer</h1>
-                <p>Бесконечный платформер</p>
-                <button class="btn btn-primary" onclick="startGame()">Начать игру</button>
-            </div>
-        </div>
-
-        <!-- Game Screen -->
-        <div id="gameScreen" class="screen">
-            <div class="header">
-                <div class="stats">
-                    <span>Score: <strong id="score">0</strong></span>
-                    <span>Height: <strong id="height">0</strong>m</span>
-                </div>
-            </div>
-            <div class="game-area" id="gameArea"></div>
-            <div class="controls">
-                <button class="btn-control" id="btnLeft">◀</button>
-                <button class="btn-control btn-jump" id="btnJump">JUMP</button>
-                <button class="btn-control" id="btnRight">▶</button>
-                <button class="btn-control btn-pause" onclick="togglePause()">⏸</button>
-            </div>
-        </div>
-
-        <!-- Pause Screen -->
-        <div id="pauseScreen" class="screen">
-            <div class="screen-content">
-                <h2>ПАУЗА</h2>
-                <button class="btn btn-primary" onclick="togglePause()">Продолжить</button>
-                <button class="btn btn-secondary" onclick="exitGame()">Выход</button>
-            </div>
-        </div>
-
-        <!-- Game Over Screen -->
-        <div id="gameOverScreen" class="screen">
-            <div class="screen-content">
-                <h2>GAME OVER</h2>
-                <p>Счёт: <strong id="finalScore">0</strong></p>
-                <p>Высота: <strong id="finalHeight">0</strong>m</p>
-                <button class="btn btn-primary" onclick="startGame()">Играть заново</button>
-                <button class="btn btn-secondary" onclick="exitGame()">Выход</button>
-            </div>
-        </div>
-    </div>
-
-    <script src="game.js"></script>
+  
 </body>
+
 </html>
