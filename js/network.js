@@ -8,67 +8,48 @@ class NetworkManager {
     this.isHost = false;
     this.hostId = null;
     this.connected = false;
-    this.lanMode = false; // true = работаем без внешнего сервера
+    this.lanMode = false;
     
-    // Callbacks
     this.onPlayerJoin = null;
     this.onPlayerLeave = null;
     this.onDataReceived = null;
     this.onConnected = null;
     this.onError = null;
     
-    // Для LAN discovery
-    this.discoveryInterval = null;
-    this.knownPeers = new Set();
+    this.myNickname = '';
+    this.myColor = '';
   }
 
-  // Инициализация сети
   async init(nickname, color, hostId = null) {
     return new Promise((resolve, reject) => {
-      // Сохраняем данные игрока
       this.myNickname = nickname;
       this.myColor = color;
 
-      // Если hostId === 'solo' — одиночный режим
       if (hostId === 'solo') {
-        this.isHost = true;
-        this.myId = 'solo_' + Utils.uid();
-        this.connected = true;
-        this.lanMode = true;
-        console.log('Solo mode activated');
-        if (this.onConnected) this.onConnected();
+        this.switchToSoloMode();
         resolve({ role: 'solo', id: this.myId });
         return;
       }
 
-      // Пробуем PeerJS с кастомным конфигом для LAN
       try {
         this.peer = new Peer({
-          // Используем TURN/STUN минимально — для LAN достаточно local
           config: {
-            iceServers: [
-              { urls: 'stun:stun.l.google.com:19302' } // Fallback STUN
-            ]
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
           },
-          // Для LAN можно использовать простой ID
           debug: 1
         });
 
         this.peer.on('open', (id) => {
           this.myId = id;
-          console.log('Peer ID:', id);
 
           if (!hostId) {
-            // Я — хост
             this.isHost = true;
             this.hostId = id;
             this.connected = true;
             this.setupHost();
-            this.startDiscovery();
             if (this.onConnected) this.onConnected();
             resolve({ role: 'host', id });
           } else {
-            // Я — клиент
             this.isHost = false;
             this.hostId = hostId;
             this.connectToHost(hostId, nickname, color);
@@ -78,10 +59,8 @@ class NetworkManager {
 
         this.peer.on('error', (err) => {
           console.error('PeerJS error:', err.type, err.message);
-          
-          // Если ошибка сервера — переключаемся в solo режим
           if (err.type === 'network' || err.type === 'server-error' || err.type === 'unavailable-id') {
-            console.log('Switching to solo/LAN mode...');
+            console.log('Switching to solo mode...');
             this.switchToSoloMode();
             resolve({ role: 'solo', id: this.myId });
           } else {
@@ -98,20 +77,23 @@ class NetworkManager {
     });
   }
 
-  // Переключение в одиночный режим
   switchToSoloMode() {
     this.isHost = true;
-    this.myId = 'solo_' + Utils.uid();
+    this.myId = 'solo_' + Date.now();
     this.connected = true;
     this.lanMode = true;
+    
     if (this.peer) {
-      this.peer.destroy();
+      try { this.peer.destroy(); } catch(e) {}
       this.peer = null;
     }
+    
+    console.log('Solo mode activated, ID:', this.myId);
+    
+    // Отправляем callback
     if (this.onConnected) this.onConnected();
   }
 
-  // Хост: ждём подключений
   setupHost() {
     if (!this.peer) return;
     
@@ -126,7 +108,6 @@ class NetworkManager {
           this.onPlayerJoin(conn.peer, conn.metadata || {});
         }
 
-        // Отправляем текущее состояние игры
         if (Game.instance) {
           conn.send({
             type: 'gameState',
@@ -152,7 +133,6 @@ class NetworkManager {
     });
   }
 
-  // Клиент: подключаемся к хосту
   connectToHost(hostId, nickname, color) {
     if (!this.peer) return;
 
@@ -172,7 +152,6 @@ class NetworkManager {
     });
 
     conn.on('close', () => {
-      // Хост отключился
       this.connections.delete(hostId);
       alert('Хост отключился! Переход в одиночный режим...');
       this.switchToSoloMode();
@@ -183,11 +162,10 @@ class NetworkManager {
 
     conn.on('error', (err) => {
       console.error('Connection to host failed:', err);
-      alert('Не удалось подключиться к хосту. Играем в одиночку!');
+      alert('Не удалось подключиться. Играем в одиночку!');
       this.switchToSoloMode();
     });
 
-    // Таймаут подключения
     setTimeout(() => {
       if (!this.connected) {
         console.log('Connection timeout, switching to solo');
@@ -196,11 +174,9 @@ class NetworkManager {
     }, 5000);
   }
 
-  // Обработка данных
   handleData(fromPeerId, data) {
     if (!data || !data.type) return;
 
-    // Ретрансляция от клиентов (если я хост)
     if (this.isHost && data.type !== 'gameState' && data.type !== 'playerList') {
       this.broadcast(data, fromPeerId);
     }
@@ -210,9 +186,8 @@ class NetworkManager {
     }
   }
 
-  // Отправка данных
   send(toPeerId, data) {
-    if (this.lanMode && toPeerId.startsWith('solo_')) return; // Solo mode — не отправляем
+    if (this.lanMode) return;
     
     const conn = this.connections.get(toPeerId);
     if (conn && conn.open) {
@@ -220,9 +195,8 @@ class NetworkManager {
     }
   }
 
-  // Broadcast всем
   broadcast(data, excludeId = null) {
-    if (this.lanMode) return; // Solo — некому слать
+    if (this.lanMode) return;
     
     for (const [peerId, conn] of this.connections) {
       if (peerId !== excludeId && conn.open) {
@@ -231,7 +205,6 @@ class NetworkManager {
     }
   }
 
-  // Отправка состояния игрока
   sendPlayerState(state) {
     if (this.lanMode) return;
     
@@ -242,7 +215,6 @@ class NetworkManager {
     });
   }
 
-  // Отправка события
   sendEvent(eventType, data) {
     if (this.lanMode) return;
     
@@ -254,10 +226,8 @@ class NetworkManager {
     });
   }
 
-  // Обновление списка игроков
   broadcastPlayerList() {
     if (this.lanMode) {
-      // Solo — только мы
       if (this.onDataReceived) {
         this.onDataReceived(null, {
           type: 'playerList',
@@ -289,22 +259,14 @@ class NetworkManager {
 
     this.broadcast({ type: 'playerList', players: players });
     
-    // Обновляем свой UI тоже
     if (this.onDataReceived) {
       this.onDataReceived(null, { type: 'playerList', players });
     }
   }
 
-  // LAN discovery — пинг других устройств в сети
-  startDiscovery() {
-    // В реальном LAN можно использовать mDNS или просто перебор IP
-    // Но для простоты — просто показываем свой ID для ручного ввода
-    console.log('Host ID for friends:', this.myId);
-  }
-
   getPlayerCount() {
     if (this.lanMode) return 1;
-    let count = 1; // себя
+    let count = 1;
     for (const conn of this.connections.values()) {
       if (conn.open) count++;
     }
@@ -320,9 +282,6 @@ class NetworkManager {
   }
 
   disconnect() {
-    if (this.discoveryInterval) {
-      clearInterval(this.discoveryInterval);
-    }
     for (const conn of this.connections.values()) {
       conn.close();
     }
@@ -334,38 +293,8 @@ class NetworkManager {
     this.connected = false;
   }
 
-  // Получить ID для подключения друзей
   getHostId() {
     return this.myId;
-  }
-
-  // Получить LAN IP для прямого подключения
-  async getLanIp() {
-    try {
-      const pc = new RTCPeerConnection({ iceServers: [] });
-      pc.createDataChannel('');
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      
-      return new Promise((resolve) => {
-        pc.onicecandidate = (ice) => {
-          if (!ice || !ice.candidate || !ice.candidate.candidate) {
-            resolve(null);
-            return;
-          }
-          const ipMatch = ice.candidate.candidate.match(/([0-9]{1,3}\.){3}[0-9]{1,3}/);
-          resolve(ipMatch ? ipMatch[0] : null);
-          pc.close();
-        };
-        
-        setTimeout(() => {
-          resolve(null);
-          pc.close();
-        }, 1000);
-      });
-    } catch (e) {
-      return null;
-    }
   }
 }
 

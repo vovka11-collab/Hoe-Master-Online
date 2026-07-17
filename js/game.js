@@ -6,19 +6,20 @@ class Game {
     
     this.canvas = document.getElementById('game-canvas');
     this.ctx = this.canvas.getContext('2d');
-    
     this.resize();
     window.addEventListener('resize', () => this.resize());
 
-    this.level = new Level();
-    this.players = new Map(); // peerId -> Player
+    this.roomIndex = 0;
+    this.room = null;
+    this.players = new Map();
     this.localPlayer = null;
     
     this.camera = { x: 0, y: 0 };
-    this.gameState = 'lobby'; // lobby, playing, dead
+    this.gameState = 'lobby';
     
     this.lastTime = 0;
-    this.networkSyncTimer = 0;
+    this.previewTimer = 0;
+    this.previewDuration = 3;
 
     this.setupNetworkHandlers();
   }
@@ -29,10 +30,13 @@ class Game {
   }
 
   setupNetworkHandlers() {
-    Network.onPlayerJoin = (peerId, metadata) => {
-      console.log('Player joined:', metadata.nickname);
-      const player = new Player(peerId, metadata.nickname, metadata.color, false);
-      this.players.set(peerId, player);
+    Network.onPlayerJoin = (peerId, meta) => {
+      const p = new Player(peerId, meta.nickname || 'Player', meta.color || '#888', false);
+      if (this.room) {
+        p.x = this.room.spawn.x;
+        p.y = this.room.spawn.y;
+      }
+      this.players.set(peerId, p);
       this.updateUI();
     };
 
@@ -41,65 +45,39 @@ class Game {
       this.updateUI();
     };
 
-    Network.onDataReceived = (fromPeerId, data) => {
-      this.handleNetworkData(fromPeerId, data);
+    Network.onDataReceived = (from, data) => {
+      this.handleNetworkData(from, data);
     };
   }
 
-  handleNetworkData(fromPeerId, data) {
+  handleNetworkData(from, data) {
     switch(data.type) {
       case 'playerState':
-        const remotePlayer = this.players.get(data.peerId);
-        if (remotePlayer) {
-          remotePlayer.setRemoteState(data.state);
-        }
+        const rp = this.players.get(data.peerId);
+        if (rp) rp.setRemoteState(data.state);
         break;
-
-      case 'playerDamaged':
-        const p = this.players.get(data.peerId);
-        if (p) p.hp = data.hp;
-        this.updateUI();
-        break;
-
       case 'playerDied':
         this.onPlayerDied(data.peerId);
         break;
-
       case 'chestOpened':
-        // Найти и открыть сундук
-        for (const chest of this.level.chests) {
-          if (chest.getId() === data.chestId) {
-            chest.opened = true;
+        for (const c of this.room.chests) {
+          if (c.getId() === data.chestId) {
+            c.opened = true;
+            for (const p of this.players.values()) p.heal(1);
             break;
           }
         }
         break;
-
-      case 'gameState':
-        // Полное состояние от хоста (для новых игроков)
-        if (data.data.level) {
-          this.level.platforms = data.data.level.platforms;
-          this.level.rooms = data.data.level.rooms;
-        }
+      case 'nextRoom':
+        this.loadRoom(data.roomIndex);
         break;
-
-      case 'event':
-        if (data.eventType === 'attack') {
-          // Визуализация атаки удалённого игрока
-          const attacker = this.players.get(data.peerId);
-          if (attacker) {
-            attacker.isAttacking = true;
-            attacker.attackFrame = 0;
-          }
-          // Проверка попадания по врагам (если я хост)
-          if (Network.isHost) {
-            this.checkAttackHit(data.data);
-          }
-        }
-        break;
-
       case 'playerList':
         this.updatePlayerList(data.players);
+        break;
+      case 'gameState':
+        if (data.data && data.data.room) {
+          // Восстанавливаем комнату от хоста
+        }
         break;
     }
   }
@@ -107,6 +85,8 @@ class Game {
   updatePlayerList(players) {
     const list = document.getElementById('connected-players');
     const count = document.getElementById('player-count');
+    if (!list || !count) return;
+    
     list.innerHTML = '';
     count.textContent = players.length;
 
@@ -118,32 +98,62 @@ class Game {
   }
 
   start(nickname, color) {
-    // Сохраняем данные игрока
-    Utils.save('player', { nickname, color });
-
-    // Создаём локального игрока
+    console.log('Game.start() called');
+    
     this.localPlayer = new Player(Network.myId, nickname, color, true);
     this.players.set(Network.myId, this.localPlayer);
+    console.log('Local player created');
 
-    // Генерируем уровень
-    this.level.generateInitial();
-
-    // UI
-    document.getElementById('lobby-screen').style.display = 'none';
-    document.getElementById('game-screen').style.display = 'block';
-    document.getElementById('death-screen').style.display = 'none';
+    const lobby = document.getElementById('lobby-screen');
+    const gameScreen = document.getElementById('game-screen');
     
-    this.gameState = 'playing';
-    this.updateUI();
+    if (lobby) lobby.style.display = 'none';
+    if (gameScreen) gameScreen.style.display = 'block';
+    console.log('Screens switched');
 
-    // Запускаем игровой цикл
+    this.loadRoom(0);
+    console.log('Room loaded, starting loop');
+    
+    this.lastTime = performance.now();
     requestAnimationFrame((t) => this.loop(t));
   }
 
-  loop(timestamp) {
-    if (this.gameState !== 'playing') return;
+  loadRoom(index) {
+    this.roomIndex = index;
+    this.room = new Room(index);
+    
+    for (const p of this.players.values()) {
+      p.x = this.room.spawn.x;
+      p.y = this.room.spawn.y;
+      p.vx = 0;
+      p.vy = 0;
+      p.hp = p.maxHp;
+    }
 
-    const dt = (timestamp - this.lastTime) / 1000;
+    this.gameState = 'preview';
+    this.previewTimer = this.previewDuration;
+    this.showRoomPreview();
+  }
+
+  showRoomPreview() {
+    const padding = 20;
+    const scaleX = (this.canvas.width - padding * 2) / this.room.width;
+    const scaleY = (this.canvas.height - padding * 2) / this.room.height;
+    this.previewScale = Math.min(scaleX, scaleY);
+    this.previewOffsetX = (this.canvas.width - this.room.width * this.previewScale) / 2;
+    this.previewOffsetY = (this.canvas.height - this.room.height * this.previewScale) / 2;
+  }
+
+  nextRoom() {
+    this.roomIndex++;
+    Network.broadcast({ type: 'nextRoom', roomIndex: this.roomIndex });
+    this.loadRoom(this.roomIndex);
+  }
+
+  loop(timestamp) {
+    if (this.gameState === 'lobby') return;
+    
+    const dt = Math.min((timestamp - this.lastTime) / 1000, 0.05);
     this.lastTime = timestamp;
 
     this.update(dt);
@@ -153,140 +163,218 @@ class Game {
   }
 
   update(dt) {
-    // Обновление локального игрока
-    const nearbyPlatforms = this.level.getPlatformsInRange(this.localPlayer.x, 800);
-    const nearbyEnemies = this.level.getEnemiesInRange(this.localPlayer.x, 800);
-    
-    this.localPlayer.update(Input, nearbyPlatforms, nearbyEnemies, dt);
-
-    // Проверка столкновения с врагами (урон игроку)
-    for (const enemy of nearbyEnemies) {
-      if (!enemy.dead && Utils.rectCollision(this.localPlayer, enemy)) {
-        this.localPlayer.takeDamage(enemy.damage);
-        // Отбрасывание
-        this.localPlayer.vx = enemy.x > this.localPlayer.x ? -8 : 8;
-        this.localPlayer.vy = -5;
+    if (this.gameState === 'preview') {
+      this.previewTimer -= dt;
+      if (this.previewTimer <= 0) {
+        this.gameState = 'playing';
       }
+      return;
     }
 
-    // Проверка столкновения с сундуками
-    const nearbyChests = this.level.getChestsInRange(this.localPlayer.x, 100);
-    for (const chest of nearbyChests) {
-      if (Utils.rectCollision(this.localPlayer, chest)) {
-        chest.open(this.localPlayer);
-      }
-      chest.update();
-    }
+    if (this.gameState !== 'playing') return;
 
-    // Обновление врагов
+    const room = this.room;
     const allPlayers = Array.from(this.players.values());
-    for (const enemy of this.level.enemies) {
-      enemy.update(nearbyPlatforms, allPlayers);
-    }
 
-    // Обновление удалённых игроков (интерполяция уже внутри)
-    for (const player of this.players.values()) {
-      if (!player.isLocal) {
-        player.update(null, nearbyPlatforms, nearbyEnemies, dt);
+    this.localPlayer.update(Input, room, room.enemies, dt);
+
+    for (const p of this.players.values()) {
+      if (!p.isLocal) {
+        p.update(null, room, room.enemies, dt);
       }
     }
 
-    // Генерация новых комнат
-    this.level.addRoomIfNeeded(this.localPlayer.x);
+    for (const e of room.enemies) {
+      e.update(room.platforms, allPlayers);
+    }
 
-    // Камера следует за игроком
-    const targetCamX = this.localPlayer.x - this.canvas.width / 3;
+    // Камера
+    const targetCamX = this.localPlayer.x - this.canvas.width / 2;
+    const targetCamY = this.localPlayer.y - this.canvas.height / 2;
     this.camera.x = Utils.lerp(this.camera.x, targetCamX, 0.1);
-    this.camera.x = Math.max(0, this.camera.x);
+    this.camera.y = Utils.lerp(this.camera.y, targetCamY, 0.1);
+    
+    this.camera.x = Utils.clamp(this.camera.x, 0, room.width - this.canvas.width);
+    this.camera.y = Utils.clamp(this.camera.y, 0, room.height - this.canvas.height);
 
-    // Синхронизация по сети (20 раз в секунду)
-    this.networkSyncTimer += dt;
-    if (this.networkSyncTimer > 0.05) {
-      this.networkSyncTimer = 0;
+    if (!Network.isSoloMode()) {
       Network.sendPlayerState(this.localPlayer.getState());
     }
 
     this.updateUI();
   }
 
-  checkAttackHit(attackData) {
-    // Хост проверяет попадания по врагам
-    for (const enemy of this.level.enemies) {
-      if (!enemy.dead && Utils.rectCollision(
-        { x: attackData.x, y: attackData.y, w: attackData.w, h: attackData.h },
-        enemy
-      )) {
-        enemy.takeDamage(attackData.damage);
+  render() {
+    const ctx = this.ctx;
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+    if (this.gameState === 'preview') {
+      this.renderPreview(ctx);
+      return;
+    }
+
+    const cx = this.camera.x;
+    const cy = this.camera.y;
+
+    // Сетка
+    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x < this.canvas.width; x += 40) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, this.canvas.height);
+      ctx.stroke();
+    }
+
+    this.room.render(ctx, cx, cy);
+
+    for (const c of this.room.chests) {
+      c.render(ctx, cx, cy);
+    }
+
+    for (const e of this.room.enemies) {
+      if (!e.dead) e.render(ctx, cx, cy);
+    }
+
+    const sorted = Array.from(this.players.values()).sort((a, b) => a.y - b.y);
+    for (const p of sorted) {
+      p.render(ctx, cx, cy);
+    }
+
+    // Стрелка к выходу
+    const exit = this.room.exit;
+    const ex = exit.x - cx;
+    const ey = exit.y - cy;
+    if (ex < 0 || ex > this.canvas.width || ey < 0 || ey > this.canvas.height) {
+      const angle = Math.atan2(ey - this.canvas.height/2, ex - this.canvas.width/2);
+      const arrowX = this.canvas.width/2 + Math.cos(angle) * 100;
+      const arrowY = this.canvas.height/2 + Math.sin(angle) * 100;
+      
+      ctx.save();
+      ctx.translate(arrowX, arrowY);
+      ctx.rotate(angle);
+      ctx.fillStyle = '#4ECDC4';
+      ctx.beginPath();
+      ctx.moveTo(10, 0);
+      ctx.lineTo(-5, -5);
+      ctx.lineTo(-5, 5);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    this.renderUI(ctx);
+  }
+
+  renderPreview(ctx) {
+    const s = this.previewScale;
+    const ox = this.previewOffsetX;
+    const oy = this.previewOffsetY;
+
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+    for (let y = 0; y < this.room.tiles.length; y++) {
+      for (let x = 0; x < this.room.tiles[y].length; x++) {
+        const tile = this.room.tiles[y][x];
+        const px = ox + x * this.room.tileSize * s;
+        const py = oy + y * this.room.tileSize * s;
+        const ts = this.room.tileSize * s;
+
+        if (tile === 0) continue;
         
-        // Отправляем результат всем
-        Network.broadcast({
-          type: 'enemyDamaged',
-          enemyId: this.level.enemies.indexOf(enemy),
-          hp: enemy.hp,
-          dead: enemy.dead
-        });
+        if (tile === 1) ctx.fillStyle = '#5a4a3a';
+        else if (tile === 2) ctx.fillStyle = '#8B7355';
+        else if (tile === 3) ctx.fillStyle = '#888';
+        else if (tile === 4) ctx.fillStyle = '#4ECDC4';
+        
+        ctx.fillRect(px, py, ts + 1, ts + 1);
       }
     }
+
+    for (const p of this.players.values()) {
+      ctx.fillStyle = p.color;
+      ctx.fillRect(ox + p.x * s, oy + p.y * s, p.w * s, p.h * s);
+    }
+
+    ctx.fillStyle = 'white';
+    ctx.font = 'bold 24px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`Комната ${this.roomIndex + 1}`, this.canvas.width/2, 50);
+    
+    ctx.font = '16px sans-serif';
+    ctx.fillStyle = '#888';
+    ctx.fillText(`Врагов: ${this.room.enemies.length}  |  Сундуков: ${this.room.chests.length}`, this.canvas.width/2, 80);
+    
+    ctx.fillStyle = '#FFEAA7';
+    ctx.fillText(`${Math.ceil(this.previewTimer)}`, this.canvas.width/2, this.canvas.height - 30);
+  }
+
+  renderUI(ctx) {
+    const mapSize = 100;
+    const mapX = this.canvas.width - mapSize - 10;
+    const mapY = 10;
+    const scale = mapSize / Math.max(this.room.width, this.room.height);
+
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(mapX, mapY, mapSize, mapSize);
+
+    for (const p of this.players.values()) {
+      ctx.fillStyle = p.isLocal ? '#fff' : p.color;
+      ctx.fillRect(mapX + p.x * scale, mapY + p.y * scale, 3, 3);
+    }
+
+    ctx.fillStyle = '#4ECDC4';
+    ctx.fillRect(mapX + this.room.exit.x * scale, mapY + this.room.exit.y * scale, 4, 4);
   }
 
   onPlayerDied(peerId) {
     this.gameState = 'dead';
-    document.getElementById('death-screen').style.display = 'flex';
+    const deathScreen = document.getElementById('death-screen');
+    if (deathScreen) deathScreen.style.display = 'flex';
     
-    // Через 3 секунды автоперезапуск (или по кнопке)
     setTimeout(() => {
-      this.restart();
+      this.restartRoom();
     }, 3000);
   }
 
-  restart() {
-    // Сброс всех игроков в начало
-    for (const player of this.players.values()) {
-      player.x = 100;
-      player.y = 300;
-      player.hp = player.maxHp;
-      player.vx = 0;
-      player.vy = 0;
+  restartRoom() {
+    for (const p of this.players.values()) {
+      p.x = this.room.spawn.x;
+      p.y = this.room.spawn.y;
+      p.vx = 0;
+      p.vy = 0;
+      p.hp = p.maxHp;
+    }
+    
+    for (const e of this.room.enemies) {
+      e.dead = false;
+      e.hp = 2 + Math.floor(this.roomIndex / 3);
     }
 
-    // Перегенерация уровня (новые комнаты)
-    this.level.generateInitial();
-
-    document.getElementById('death-screen').style.display = 'none';
+    const deathScreen = document.getElementById('death-screen');
+    if (deathScreen) deathScreen.style.display = 'none';
     this.gameState = 'playing';
-    this.lastTime = performance.now();
-    requestAnimationFrame((t) => this.loop(t));
   }
 
-  getFullState() {
-    return {
-      level: {
-        platforms: this.level.platforms,
-        rooms: this.level.rooms
-      },
-      players: Array.from(this.players.values()).map(p => ({
-        id: p.id,
-        state: p.getState()
-      }))
-    };
-  }
-    onHostDisconnected() {
-    // Хост отключился — все враги и мир остаются, но мультиплеер выключен
-    Network.switchToSoloMode();
-    
-    // Удаляем всех удалённых игроков
+  onHostDisconnected() {
+    this.switchToSoloMode();
     for (const [peerId, player] of this.players) {
       if (!player.isLocal) {
         this.players.delete(peerId);
       }
     }
-    
     this.updateUI();
   }
 
+  switchToSoloMode() {
+    Network.switchToSoloMode();
+  }
+
   updateUI() {
-    // HP локального игрока
     const hpBar = document.getElementById('hp-bar');
+    if (!hpBar || !this.localPlayer) return;
+    
     hpBar.innerHTML = '';
     for (let i = 0; i < this.localPlayer.maxHp; i++) {
       const heart = document.createElement('div');
@@ -294,63 +382,33 @@ class Game {
       hpBar.appendChild(heart);
     }
 
-    // HP всех игроков
     const playersHp = document.getElementById('players-hp');
+    if (!playersHp) return;
+    
     playersHp.innerHTML = '';
-    for (const player of this.players.values()) {
+    for (const p of this.players.values()) {
       const div = document.createElement('div');
       div.className = 'player-hp';
-      
       const hearts = [];
-      for (let i = 0; i < player.maxHp; i++) {
-        hearts.push(i >= player.hp ? 'empty' : 'full');
-      }
+      for (let i = 0; i < p.maxHp; i++) hearts.push(i >= p.hp ? 'empty' : 'full');
       
       div.innerHTML = `
-        <div class="name" style="color:${player.color}">${player.nickname}</div>
-        <div class="hearts">
-          ${hearts.map(h => `<div class="heart ${h}"></div>`).join('')}
-        </div>
+        <div class="name" style="color:${p.color}">${p.nickname}</div>
+        <div class="hearts">${hearts.map(h => `<div class="heart ${h}"></div>`).join('')}</div>
       `;
       playersHp.appendChild(div);
     }
 
-    // Уровень тяпки
-    document.querySelector('#hoe-level span').textContent = this.localPlayer.hoeLevel;
+    const hoeLevel = document.querySelector('#hoe-level span');
+    if (hoeLevel) hoeLevel.textContent = this.localPlayer.hoeLevel;
   }
 
-  render() {
-    const ctx = this.ctx;
-    ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-    // Уровень
-    this.level.render(ctx, this.camera.x);
-
-    // Сундуки
-    for (const chest of this.level.chests) {
-      if (Math.abs(chest.x - this.camera.x) < this.canvas.width + 200) {
-        chest.render(ctx, this.camera.x);
-      }
-    }
-
-    // Враги
-    for (const enemy of this.level.enemies) {
-      if (Math.abs(enemy.x - this.camera.x) < this.canvas.width + 200) {
-        enemy.render(ctx, this.camera.x);
-      }
-    }
-
-    // Игроки (отсортированы по Y для псевдо-3D)
-    const sortedPlayers = Array.from(this.players.values())
-      .sort((a, b) => a.y - b.y);
-    
-    for (const player of sortedPlayers) {
-      if (Math.abs(player.x - this.camera.x) < this.canvas.width + 200) {
-        player.render(ctx, this.camera.x);
-      }
-    }
+  getFullState() {
+    return {
+      roomIndex: this.roomIndex,
+      room: this.room ? this.room.getPreviewData() : null
+    };
   }
 }
 
-// Глобальный экземпляр
 let GameInstance = null;

@@ -1,10 +1,28 @@
 // ===== ТОЧКА ВХОДА =====
 
+console.log('=== MAIN.JS LOADED ===');
+
 document.addEventListener('DOMContentLoaded', () => {
+  console.log('=== DOM READY ===');
+
+  // Проверяем элементы
+  const nicknameInput = document.getElementById('nickname');
+  const startBtn = document.getElementById('start-btn');
+  const soloBtn = document.getElementById('solo-btn');
+  
+  console.log('nickname:', !!nicknameInput);
+  console.log('startBtn:', !!startBtn);
+  console.log('soloBtn:', !!soloBtn);
+
+  if (!nicknameInput || !startBtn || !soloBtn) {
+    console.error('CRITICAL: Missing elements!');
+    return;
+  }
+
   // Загрузка сохранённого ника
   const saved = Utils.load('player', {});
   if (saved.nickname) {
-    document.getElementById('nickname').value = saved.nickname;
+    nicknameInput.value = saved.nickname;
   }
 
   // Выбор цвета
@@ -22,25 +40,41 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // === ОДИНОЧНЫЙ РЕЖИМ ===
-  document.getElementById('solo-btn').addEventListener('click', async () => {
-    const nickname = document.getElementById('nickname').value.trim() || 'Farmer';
+  soloBtn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('=== SOLO BUTTON CLICKED ===');
+    
+    const nickname = nicknameInput.value.trim() || 'Farmer';
+    console.log('Starting solo mode, nick:', nickname);
     
     try {
       await Network.init(nickname, selectedColor, 'solo');
+      console.log('Network init success');
+      
       GameInstance = new Game();
+      console.log('Game created');
+      
       GameInstance.start(nickname, selectedColor);
+      console.log('Game started!');
     } catch (err) {
       console.error('Solo mode error:', err);
+      alert('Ошибка: ' + err.message);
     }
   });
 
   // === МУЛЬТИПЛЕЕР ===
-  document.getElementById('start-btn').addEventListener('click', async () => {
-    const nickname = document.getElementById('nickname').value.trim() || 'Farmer';
+  startBtn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('=== START BUTTON CLICKED ===');
+    
+    const nickname = nicknameInput.value.trim() || 'Farmer';
     
     try {
       const urlParams = new URLSearchParams(window.location.search);
       const hostId = urlParams.get('host');
+      console.log('Host ID from URL:', hostId);
 
       await Network.init(nickname, selectedColor, hostId);
       
@@ -53,6 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     } catch (err) {
       console.error('Network error:', err);
+      // Fallback в solo
       await Network.init(nickname, selectedColor, 'solo');
       GameInstance = new Game();
       GameInstance.start(nickname, selectedColor);
@@ -60,11 +95,16 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Кнопка рестарта
-  document.getElementById('restart-btn').addEventListener('click', () => {
-    if (GameInstance) {
-      GameInstance.restart();
-    }
-  });
+  const restartBtn = document.getElementById('restart-btn');
+  if (restartBtn) {
+    restartBtn.addEventListener('click', () => {
+      if (GameInstance) {
+        GameInstance.restartRoom();
+      }
+    });
+  }
+
+  console.log('=== ALL LISTENERS ATTACHED ===');
 });
 
 function showHostInfo(hostId) {

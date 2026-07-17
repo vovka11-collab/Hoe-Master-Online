@@ -10,10 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     
     - name: Setup Node.js
-      uses: actions/setup-node@v3
+      uses: actions/setup-node@v4
       with:
         node-version: '18'
     
@@ -36,21 +36,26 @@ jobs:
         cd cordova-app
         sed -i 's/<content src="index.html" \/>/<content src="index.html" \/><preference name="Orientation" value="landscape" \/><preference name="Fullscreen" value="true" \/><preference name="DisallowOverscroll" value="true" \/><preference name="BackgroundColor" value="0xFF1a1a2e" \/>/g' config.xml
     
+    - name: Setup JDK
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+    
     - name: Build Android
       run: |
         cd cordova-app
         cordova build android --release
     
-    - name: Sign APK (debug key)
+    - name: Sign APK
       run: |
         cd cordova-app/platforms/android/app/build/outputs/apk/release
         keytool -genkey -v -keystore debug.keystore -alias androiddebugkey -keypass android -storepass android -keyalg RSA -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-        zipalign -v 4 app-release-unsigned.apk app-release.apk || true
-        apksigner sign --ks debug.keystore --ks-pass pass:android --key-pass pass:android --out app-signed.apk app-release-unsigned.apk || true
-        cp app-release-unsigned.apk HoeMasterOnline.apk || cp app-release.apk HoeMasterOnline.apk || true
+        jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 -keystore debug.keystore -storepass android -keypass android app-release-unsigned.apk androiddebugkey
+        zipalign -v 4 app-release-unsigned.apk HoeMasterOnline.apk
     
     - name: Upload APK
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: HoeMasterOnline-APK
-        path: cordova-app/platforms/android/app/build/outputs/apk/release/*.apk
+        path: cordova-app/platforms/android/app/build/outputs/apk/release/HoeMasterOnline.apk

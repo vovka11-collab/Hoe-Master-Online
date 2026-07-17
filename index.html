@@ -45,7 +45,7 @@
 
     <!-- Тач-контролы -->
     <div id="touch-controls">
-      <div id="dpad">
+      <div id="dpad" style="display:none;">
         <button id="btn-left">◀</button>
         <button id="btn-right">▶</button>
       </div>
@@ -63,12 +63,13 @@
     <button id="restart-btn">Переродиться</button>
   </div>
 
+  <!-- СКРИПТЫ — ВАЖЕН ПОРЯДОК! -->
   <script src="js/utils.js"></script>
   <script src="js/network.js"></script>
   <script src="js/player.js"></script>
   <script src="js/enemy.js"></script>
   <script src="js/chest.js"></script>
-  <script src="js/level.js"></script>
+  <script src="js/room.js"></script>
   <script src="js/input.js"></script>
   <script src="js/game.js"></script>
   <script src="js/main.js"></script>
