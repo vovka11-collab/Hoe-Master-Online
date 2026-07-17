@@ -5,119 +5,55 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Platformer">
     <meta name="theme-color" content="#667eea">
-    <title>Platformer Multiplayer</title>
+    <title>Platformer Game</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="container" id="container">
-        <!-- Стартовый экран -->
-        <div id="startScreen" class="screen">
-            <div class="start-content">
+    <div id="app">
+        <!-- Start Screen -->
+        <div id="startScreen" class="screen active">
+            <div class="screen-content">
                 <h1>🎮 Platformer</h1>
-                <p>Вечный платформер с друзьями</p>
-                <button class="btn btn-primary" onclick="showModeScreen()">Начать</button>
+                <p>Бесконечный платформер</p>
+                <button class="btn btn-primary" onclick="startGame()">Начать игру</button>
             </div>
         </div>
 
-        <!-- Выбор режима -->
-        <div id="modeScreen" class="screen hidden">
-            <div class="mode-content">
-                <h2>Выбери режим</h2>
-                <button class="btn btn-mode" onclick="startSinglePlayer()">
-                    <span class="mode-icon">👤</span>
-                    <span class="mode-text">Одиночная игра</span>
-                </button>
-                <button class="btn btn-mode" onclick="showMultiplayerOptions()">
-                    <span class="mode-icon">👥</span>
-                    <span class="mode-text">Мультиплеер (сеть)</span>
-                </button>
-            </div>
-        </div>
-
-        <!-- Опции мультиплеера -->
-        <div id="multiplayerScreen" class="screen hidden">
-            <div class="multiplayer-content">
-                <h2>Мультиплеер</h2>
-                <button class="btn btn-mode" onclick="startAsHost()">
-                    <span class="mode-icon">🖥️</span>
-                    <span class="mode-text">Создать игру (хост)</span>
-                </button>
-                <button class="btn btn-mode" onclick="startAsClient()">
-                    <span class="mode-icon">📱</span>
-                    <span class="mode-text">Присоединиться</span>
-                </button>
-                <button class="btn btn-secondary" onclick="showModeScreen()">Назад</button>
-            </div>
-        </div>
-
-        <!-- Поиск игры (клиент) -->
-        <div id="clientScreen" class="screen hidden">
-            <div class="client-content">
-                <h3>Ищу игру...</h3>
-                <div class="loader"></div>
-                <p id="clientStatus">Поиск серверов в сети...</p>
-                <div id="serverList" class="server-list"></div>
-                <button class="btn btn-secondary" onclick="cancelClient()">Отмена</button>
-            </div>
-        </div>
-
-        <!-- Экран хоста (ожидание подключения) -->
-        <div id="hostScreen" class="screen hidden">
-            <div class="host-content">
-                <h3>Ожидание подключения...</h3>
-                <p>IP адрес: <span id="hostIP">192.168.1.100</span>:<span id="hostPort">8080</span></p>
-                <p>Подключено игроков: <span id="playersCount">1</span></p>
-                <div id="playersList" class="players-list"></div>
-                <button class="btn btn-primary" id="startGameBtn" onclick="startMultiplayerGame()" disabled>Начать игру</button>
-                <button class="btn btn-secondary" onclick="cancelHost()">Отмена</button>
-            </div>
-        </div>
-
-        <!-- Основная игра -->
-        <div id="gameScreen" class="screen hidden">
+        <!-- Game Screen -->
+        <div id="gameScreen" class="screen">
             <div class="header">
                 <div class="stats">
-                    <p>Score: <span id="score">0</span></p>
-                    <p>Altitude: <span id="altitude">0</span>m</p>
-                </div>
-                <div class="players-info">
-                    <div id="playersStats"></div>
+                    <span>Score: <strong id="score">0</strong></span>
+                    <span>Height: <strong id="height">0</strong>m</span>
                 </div>
             </div>
-
-            <div class="game-area" id="gameArea">
-                <!-- Игроки будут добавлены динамически -->
-            </div>
-
-            <!-- Мобильные кнопки управления -->
-            <div class="mobile-controls">
-                <div class="control-group">
-                    <button class="btn-control btn-left" id="btnLeft">◀</button>
-                    <button class="btn-control btn-right" id="btnRight">▶</button>
-                </div>
+            <div class="game-area" id="gameArea"></div>
+            <div class="controls">
+                <button class="btn-control" id="btnLeft">◀</button>
                 <button class="btn-control btn-jump" id="btnJump">JUMP</button>
-                <button class="btn-control btn-pause" id="btnPause" onclick="togglePause()">⏸</button>
+                <button class="btn-control" id="btnRight">▶</button>
+                <button class="btn-control btn-pause" onclick="togglePause()">⏸</button>
             </div>
+        </div>
 
-            <!-- Меню паузы -->
-            <div id="pauseMenu" class="pause-menu hidden">
-                <div class="pause-content">
-                    <h2>Пауза</h2>
-                    <button class="btn btn-primary" onclick="togglePause()">Продолжить</button>
-                    <button class="btn btn-secondary" onclick="exitGame()">Выход</button>
-                </div>
+        <!-- Pause Screen -->
+        <div id="pauseScreen" class="screen">
+            <div class="screen-content">
+                <h2>ПАУЗА</h2>
+                <button class="btn btn-primary" onclick="togglePause()">Продолжить</button>
+                <button class="btn btn-secondary" onclick="exitGame()">Выход</button>
             </div>
+        </div>
 
-            <!-- Game Over Screen -->
-            <div id="gameOver" class="game-over hidden">
-                <div class="game-over-content">
-                    <h2>Game Over!</h2>
-                    <p>Финальный счёт: <span id="finalScore">0</span></p>
-                    <p>Максимальная высота: <span id="maxAltitude">0</span>m</p>
-                    <button class="btn btn-primary" onclick="location.reload()">Играть снова</button>
-                </div>
+        <!-- Game Over Screen -->
+        <div id="gameOverScreen" class="screen">
+            <div class="screen-content">
+                <h2>GAME OVER</h2>
+                <p>Счёт: <strong id="finalScore">0</strong></p>
+                <p>Высота: <strong id="finalHeight">0</strong>m</p>
+                <button class="btn btn-primary" onclick="startGame()">Играть заново</button>
+                <button class="btn btn-secondary" onclick="exitGame()">Выход</button>
             </div>
         </div>
     </div>
